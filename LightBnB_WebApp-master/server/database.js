@@ -108,17 +108,91 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = (options, limit = 10) => {
-  return pool
-    .query(`
-    SELECT *
-    FROM properties
-    LIMIT $1`, [limit])
-    .then((result) => {
-      return result.rows
-    })
-    .catch((err) => {
-      console.error(err.message)
-    });
+
+  const {
+
+    city,
+    owner_id,
+    minimum_price_per_night,
+    maximum_price_per_night,
+    minimum_rating
+
+  } = options;
+
+  const queryParam = [];
+  const queryArray = [];
+  const ownerProperty = [];
+
+  let queryString = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `
+  if (city) {
+    queryParam.push(`%${city}%`);
+    queryArray.push(`city LIKE $${queryParam.length}`);
+  }
+
+  if(owner_id) {
+    queryParam.push(owner_id);
+    ownerProperty.push(`owner_id = $${queryParam.length}`);
+  }
+
+  if(minimum_price_per_night) {
+    queryParam.push(minimum_price_per_night * 100);
+    queryArray.push(`cost_per_night > $${queryParam.length}`);
+  }
+
+  if(maximum_price_per_night) {
+    queryParam.push(maximum_price_per_night * 100);
+    queryArray.push(`cost_per_night <= $${queryParam.length}`);
+  }
+
+  if(minimum_rating) {
+    queryParam.push(minimum_rating);
+    queryArray.push(`rating >= $${queryParam.length}`);
+    
+  }
+
+  queryParam.push(limit);
+
+  if (queryArray.length > 0) {
+    queryString += `WHERE ${queryArray.join (' AND ')}`
+  }
+
+  if (ownerProperty.length > 0) {
+    queryString += `JOIN users ON owner_id = users.id
+  WHERE ${ownerProperty}`
+  }
+
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${queryParam.length};
+
+  `
+
+    console.log(queryString, queryParam);
+
+    return pool.query(queryString, queryParam).then((res)=> res.rows );
+
+
+
+
+
+
+
+  // return pool
+  //   .query(`
+  //   SELECT *
+  //   FROM properties
+  //   LIMIT $1`, [limit])
+  //   .then((result) => {
+  //     return result.rows
+  //   })
+  //   .catch((err) => {
+  //     console.error(err.message)
+  //   });
 
 };
 exports.getAllProperties = getAllProperties;
